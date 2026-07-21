@@ -166,6 +166,15 @@
     cursor:pointer;margin-top:10px;
   }
   .copy-btn:hover{border-color:var(--gold);}
+  .action-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .action-row .copy-btn{margin-top:10px;}
+
+  .retry-btn{
+    font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:var(--navy-950);
+    background:var(--gold);border:none;padding:7px 16px;border-radius:4px;cursor:pointer;
+    margin-top:12px;
+  }
+  .retry-btn:hover{background:var(--gold-soft);}
 
   .loading{
     padding:22px;font-family:'Inter',sans-serif;color:var(--ink-dim);font-size:13.5px;
@@ -330,6 +339,10 @@ function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+function escapeJs(s){
+  return (s||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' ');
+}
+
 async function consultar(){
   const q = document.getElementById('q').value.trim();
   if(!q) return;
@@ -362,7 +375,11 @@ async function consultar(){
     pintarResultado(q, parsed);
 
   }catch(err){
-    out.innerHTML = `<div class="error-box utility">No se ha podido completar la consulta (${escapeHtml(err.message)}). Reformula la pregunta o inténtalo de nuevo.</div>`;
+    out.innerHTML = `
+      <div class="error-box utility">
+        No se ha podido completar la consulta (${escapeHtml(err.message)}).
+        <div><button class="retry-btn" onclick="consultar()">Reintentar</button></div>
+      </div>`;
     console.error(err);
   }finally{
     btn.disabled = false;
@@ -397,7 +414,10 @@ function pintarResultado(q, r){
       <div class="section redaccion">
         <h3 class="utility">Redacción sugerida para la memoria justificativa</h3>
         <div class="body" id="redaccionTexto">${escapeHtml(r.redaccion_memoria)}</div>
-        <button class="copy-btn utility" onclick="copiarRedaccion()">Copiar texto</button>
+        <div class="action-row">
+          <button class="copy-btn utility" onclick="copiarRedaccion()">Copiar texto</button>
+          <button class="copy-btn utility" onclick="descargarWord('${escapeJs(q)}')">Descargar como Word</button>
+        </div>
       </div>
       <div class="section">
         <h3 class="utility">Información que falta confirmar</h3>
@@ -410,6 +430,34 @@ function pintarResultado(q, r){
 function copiarRedaccion(){
   const t = document.getElementById('redaccionTexto').innerText;
   navigator.clipboard.writeText(t);
+}
+
+function descargarWord(pregunta){
+  const texto = document.getElementById('redaccionTexto').innerText;
+  const fecha = new Date().toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit', year:'numeric'});
+  const html = `
+    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head><meta charset="utf-8"><title>Memoria justificativa</title></head>
+    <body style="font-family:Calibri,Arial,sans-serif;font-size:11pt;">
+      <p style="font-size:9pt;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">CIEMAT · División de Combustión y Gasificación</p>
+      <h2 style="margin-top:0;">Memoria Justificativa — Redacción de apoyo</h2>
+      <p style="font-size:9pt;color:#888;margin-top:-8px;">Generado el ${fecha} · Consulta: ${escapeHtml(pregunta)}</p>
+      <hr>
+      <p style="text-align:justify;line-height:1.5;">${escapeHtml(texto).replace(/\n/g, '<br>')}</p>
+      <hr>
+      <p style="font-size:8.5pt;color:#999;">Documento generado por el Clasificador de Expedientes CIEMAT. Apoyo a la redacción; no sustituye la revisión de Gabinete Jurídico.</p>
+    </body>
+    </html>
+  `;
+  const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `memoria_justificativa_${fecha.replace(/\//g,'-')}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function limpiarHistorial(){
