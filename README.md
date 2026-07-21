@@ -49,11 +49,9 @@ Funciona en escritorio y móvil, directamente desde el navegador. Sin instalaci�
 
 ## 🗂️ Estructura del proyecto
 
-clasificador-expedientes-ciemat/
-├── index.html          → frontend estático (sin build)
-├── api/
-│   └── clasificar.js   → función serverless (Vercel), llama a la API de Anthropic
-└── package.json        → fija Node >=18 (fetch nativo, sin dependencias)
+- **`index.html`** — frontend estático (sin build)
+- **`api/clasificar.js`** — función serverless (Vercel), llama a la API de Anthropic
+- **`package.json`** — fija Node >=18 (fetch nativo, sin dependencias)
 
 ---
 
