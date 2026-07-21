@@ -79,8 +79,7 @@ module.exports = async function handler(req, res) {
         max_tokens: 1500,
         system: SYSTEM_PROMPT,
         messages: [
-          { role: 'user', content: pregunta },
-          { role: 'assistant', content: '{' }
+          { role: 'user', content: pregunta }
         ]
       })
     });
@@ -91,16 +90,24 @@ module.exports = async function handler(req, res) {
     }
 
     const data = await anthropicResponse.json();
+
+    if (data.stop_reason === 'max_tokens') {
+      return res.status(502).json({ error: 'La respuesta se cortó por longitud. Reformula la pregunta de forma más breve o inténtalo de nuevo.' });
+    }
+
     const textBlock = (data.content || []).find(b => b.type === 'text');
     if (!textBlock) {
       return res.status(502).json({ error: 'Respuesta vacía del modelo.' });
     }
 
-    let clean = textBlock.text.replace(/```json|```/g, '').trim();
-    clean = '{' + clean;
-    if (data.stop_reason === 'max_tokens') {
-      return res.status(502).json({ error: 'La respuesta se cortó por longitud. Reformula la pregunta de forma más breve o inténtalo de nuevo.' });
+    const raw = textBlock.text;
+    const firstBrace = raw.indexOf('{');
+    const lastBrace = raw.lastIndexOf('}');
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+      return res.status(502).json({ error: 'El modelo no devolvió un JSON válido.', raw });
     }
+    const clean = raw.slice(firstBrace, lastBrace + 1);
+
     let parsed;
     try {
       parsed = JSON.parse(clean);
