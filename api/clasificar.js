@@ -76,9 +76,12 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
+        max_tokens: 1500,
         system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: pregunta }]
+        messages: [
+          { role: 'user', content: pregunta },
+          { role: 'assistant', content: '{' }
+        ]
       })
     });
 
@@ -93,7 +96,11 @@ module.exports = async function handler(req, res) {
       return res.status(502).json({ error: 'Respuesta vacía del modelo.' });
     }
 
-    const clean = textBlock.text.replace(/```json|```/g, '').trim();
+    let clean = textBlock.text.replace(/```json|```/g, '').trim();
+    clean = '{' + clean;
+    if (data.stop_reason === 'max_tokens') {
+      return res.status(502).json({ error: 'La respuesta se cortó por longitud. Reformula la pregunta de forma más breve o inténtalo de nuevo.' });
+    }
     let parsed;
     try {
       parsed = JSON.parse(clean);
