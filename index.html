@@ -85,6 +85,32 @@
   .row-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:14px;gap:12px;flex-wrap:wrap;}
   .hint{font-family:'Inter',sans-serif;font-size:11.5px;color:var(--slate);}
 
+  .context-row{
+    display:flex;gap:20px;margin-top:16px;flex-wrap:wrap;
+    padding-top:16px;border-top:1px dashed rgba(255,255,255,0.08);
+  }
+  .context-field{flex:1;min-width:200px;}
+  .context-field label{
+    font-family:'Inter',sans-serif;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--slate);display:block;margin-bottom:8px;
+  }
+  .context-field input[type="number"],
+  .context-field input[type="text"]{
+    width:100%;background:var(--navy-800);border:1px solid rgba(255,255,255,0.08);
+    border-radius:4px;color:var(--ink);font-family:'Inter',sans-serif;font-size:13.5px;
+    padding:9px 11px;outline:none;
+  }
+  .context-field input:focus{border-color:var(--gold);}
+  .context-field input::placeholder{color:var(--slate);}
+
+  .toggle-group{display:flex;gap:0;border:1px solid rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;width:fit-content;}
+  .toggle-btn{
+    background:var(--navy-800);color:var(--ink-dim);border:none;
+    padding:8px 18px;font-size:12.5px;cursor:pointer;transition:all .12s ease;
+  }
+  .toggle-btn.active{background:var(--gold);color:var(--navy-950);font-weight:600;}
+  .toggle-btn:not(.active):hover{background:var(--navy-700);}
+
   button.submit{
     font-family:'Inter',sans-serif;font-weight:600;font-size:13px;letter-spacing:.02em;
     background:var(--gold);color:var(--navy-950);border:none;
@@ -195,8 +221,29 @@
   <div class="query-box">
     <label class="utility" for="q">Consulta</label>
     <textarea id="q" placeholder="Ej: Las pesas de calibración, ¿son material de ferretería o de laboratorio? ¿Qué expediente corresponde?"></textarea>
+
+    <div class="context-row">
+      <div class="context-field">
+        <label class="utility" for="importe">Importe estimado (€, sin IVA) — opcional</label>
+        <input type="number" id="importe" class="utility" placeholder="Ej: 12000" min="0" step="0.01">
+      </div>
+
+      <div class="context-field">
+        <label class="utility">¿Vinculado a proyecto I+D+i?</label>
+        <div class="toggle-group">
+          <button type="button" class="toggle-btn utility active" id="idiNo" onclick="setIdi(false)">No</button>
+          <button type="button" class="toggle-btn utility" id="idiSi" onclick="setIdi(true)">Sí</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="context-field" id="proyectoIdiWrap" style="display:none; margin-top:12px;">
+      <label class="utility" for="proyectoIdi">Nombre del proyecto I+D+i</label>
+      <input type="text" id="proyectoIdi" class="utility" placeholder="Ej: BioEnH2">
+    </div>
+
     <div class="row-bottom">
-      <span class="hint">Cuanto más contexto des (importe, si es para un proyecto I+D, si hay proveedor único), más precisa la respuesta.</span>
+      <span class="hint">Cuanto más contexto des, más precisa la respuesta.</span>
       <button class="submit utility" id="btn" onclick="consultar()">Consultar clasificación</button>
     </div>
   </div>
@@ -212,7 +259,7 @@
   </div>
 
   <footer class="f">
-    <span>Herramienta interna · División de Combustión y Gasificación · Creada por Ignacio Menárguez Fernández</span>
+    <span>Herramienta interna · Menárguez · División de Combustión y Gasificación · Creada por Ignacio Menárguez Fernández</span>
     <span>No sustituye la revisión de Gabinete Jurídico ante casos límite</span>
   </footer>
 </div>
@@ -221,16 +268,41 @@
 const API_ENDPOINT = '/api/clasificar';
 
 let historial = [];
+let esIdi = false;
 
-async function cargarHistorial(){
+function setIdi(valor){
+  esIdi = valor;
+  document.getElementById('idiNo').classList.toggle('active', !valor);
+  document.getElementById('idiSi').classList.toggle('active', valor);
+  document.getElementById('proyectoIdiWrap').style.display = valor ? 'block' : 'none';
+}
+
+function construirPreguntaConContexto(){
+  const q = document.getElementById('q').value.trim();
+  const importe = document.getElementById('importe').value.trim();
+  const proyectoIdi = document.getElementById('proyectoIdi').value.trim();
+
+  let contexto = [];
+  if(importe){
+    contexto.push(`Importe estimado: ${importe} € (sin IVA)`);
+  }
+  contexto.push(`Vinculado a proyecto de I+D+i: ${esIdi ? 'Sí' : 'No'}${esIdi && proyectoIdi ? ' (proyecto: ' + proyectoIdi + ')' : ''}`);
+
+  if(contexto.length){
+    return `${q}\n\nContexto adicional proporcionado por el usuario:\n- ${contexto.join('\n- ')}`;
+  }
+  return q;
+}
+
+function cargarHistorial(){
   try{
-    const r = await window.storage.get('clasificador:historial');
-    if(r && r.value){ historial = JSON.parse(r.value); renderHistorial(); }
+    const raw = localStorage.getItem('clasificador:historial');
+    if(raw){ historial = JSON.parse(raw); renderHistorial(); }
   }catch(e){ /* sin historial previo */ }
 }
 
-async function guardarHistorial(){
-  try{ await window.storage.set('clasificador:historial', JSON.stringify(historial.slice(0,30))); }
+function guardarHistorial(){
+  try{ localStorage.setItem('clasificador:historial', JSON.stringify(historial.slice(0,30))); }
   catch(e){ console.error('No se pudo guardar historial', e); }
 }
 
@@ -261,6 +333,7 @@ function escapeHtml(s){
 async function consultar(){
   const q = document.getElementById('q').value.trim();
   if(!q) return;
+  const preguntaEnviada = construirPreguntaConContexto();
   const btn = document.getElementById('btn');
   const out = document.getElementById('output');
   btn.disabled = true;
@@ -271,7 +344,7 @@ async function consultar(){
     const response = await fetch(API_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pregunta: q })
+      body: JSON.stringify({ pregunta: preguntaEnviada })
     });
     const parsed = await response.json();
     if(!response.ok){
@@ -339,9 +412,9 @@ function copiarRedaccion(){
   navigator.clipboard.writeText(t);
 }
 
-async function limpiarHistorial(){
+function limpiarHistorial(){
   historial = [];
-  await guardarHistorial();
+  guardarHistorial();
   renderHistorial();
 }
 
