@@ -162,6 +162,7 @@
   .section .body{font-size:16px;line-height:1.65;color:var(--ink);white-space:pre-wrap;}
   .section .body strong{color:var(--gold-soft);font-weight:600;}
   .section.legal .body{font-size:14.5px;color:var(--ink-dim);}
+  .section.fuentes .body{font-size:12.5px;color:var(--slate);font-style:italic;}
   .section.redaccion .body{
     background:var(--navy-800);border-left:3px solid var(--gold);
     padding:14px 16px;border-radius:0 4px 4px 0;font-size:14.5px;
@@ -432,6 +433,10 @@ function pintarResultado(q, r){
       <div class="section">
         <h3 class="utility">Información que falta confirmar</h3>
         <div class="body">${escapeHtml(r.informacion_faltante)}</div>
+      </div>
+      <div class="section fuentes">
+        <h3 class="utility">Fuentes normativas citadas</h3>
+        <div class="body">${escapeHtml(r.fuentes || 'No especificado.')}</div>
       </div>
     </div>
   `;
