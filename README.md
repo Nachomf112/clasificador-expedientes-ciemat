@@ -1,57 +1,76 @@
-# Clasificador de Expedientes · CIEMAT
+# 🏛️ Clasificador de Expedientes CIEMAT
 
-Herramienta interna de apoyo a la contratación menor en el CIEMAT (División de Combustión y Gasificación). Permite consultar en lenguaje natural la naturaleza de un suministro, servicio u obra, y obtener al instante su clasificación, el umbral legal aplicable y un texto listo para pegar en la memoria justificativa del expediente.
+Asistente de clasificación normativa para la tramitación de contratos menores en el CIEMAT — determina tipo de objeto, CPV, umbral aplicable y redacción de memoria justificativa en segundos.
 
-**Demo:** [expedientes.menarguez-ia.com](https://expedientes.menarguez-ia.com)
+`Estado` `Activo` &nbsp; `Marco legal` `LCSP 9/2017` &nbsp; `Modelo` `Claude Sonnet` &nbsp; `Licencia` `Uso interno`
 
 ---
 
-## Qué resuelve
+## 🌐 Acceso
 
-Antes de tramitar un contrato menor hay que decidir varias cosas que a menudo generan devoluciones de Gabinete si se justifican mal:
+**[expedientes.menarguez-ia.com](https://expedientes.menarguez-ia.com)**
 
-- ¿Es un suministro, un servicio o una obra?
-- ¿Qué CPV le corresponde?
-- ¿Qué umbral se aplica — el general de 15.000 €, o la excepción de 50.000 € por vinculación a un proyecto de I+D+i (DA54 LCSP)?
-- ¿Qué hay que declarar en la memoria justificativa para que no la devuelvan (causa de no fraccionamiento, causa de no planificación, Instrucción 1/2019)?
+Funciona en escritorio y móvil, directamente desde el navegador. Sin instalación.
 
-Esta app responde a esas preguntas con base legal citada (LCSP 9/2017, Ley 39/2015, Ley 40/2015, EBEP, Instrucción 1/2019) y genera un párrafo de memoria adaptable.
+---
 
-## Cómo funciona
+## 📋 Qué resuelve
 
-1. El usuario escribe una pregunta libre (ej. *"las pesas de calibración, ¿son material de ferretería o de laboratorio?"*).
-2. El frontend (`index.html`) envía la pregunta a `/api/clasificar`.
-3. La función serverless (`api/clasificar.js`) llama a la API de Claude con un system prompt que codifica el marco normativo de contratación menor, y devuelve un JSON estructurado.
-4. El frontend muestra: clasificación, CPV orientativo, umbral aplicable, base legal, redacción sugerida para la memoria, e información que falta confirmar.
-5. El historial de consultas se guarda en `localStorage` del navegador (no se envía a ningún servidor propio, solo queda en el equipo del usuario).
+| Duda | Respuesta que da la app |
+|---|---|
+| ¿Suministro, servicio u obra? | Clasificación del objeto contractual con criterio funcional, no solo comercial |
+| ¿Qué CPV le corresponde? | Código CPV orientativo y su familia |
+| ¿Qué umbral se aplica? | 15.000 € general o 50.000 € por excepción DA54 (I+D+i), según el caso |
+| ¿Qué tiene que llevar la memoria? | Párrafo institucional listo para pegar, con causa de no fraccionamiento y no planificación |
 
-## Estructura del proyecto
+---
+
+## ⚙️ Cómo funciona
+
+1. Escribes la pregunta en lenguaje natural (ej. *"las pesas de calibración, ¿son material de ferretería o de laboratorio?"*).
+2. El frontend envía la consulta a `/api/clasificar`.
+3. Una función serverless en Vercel llama a la API de Claude con el marco normativo de contratación menor cargado en el system prompt.
+4. Se devuelve un JSON estructurado que el frontend pinta en pantalla.
+5. El historial de consultas queda guardado en `localStorage` del navegador — no sale de tu equipo.
+
+---
+
+## 📚 Marco legal cubierto
+
+| Norma | Contenido relevante |
+|---|---|
+| Ley 9/2017 (LCSP) | Arts. 2, 118, 118.3, Disposición Adicional 54ª |
+| Ley 39/2015 | Procedimiento administrativo común |
+| Ley 40/2015 | Régimen jurídico del sector público |
+| RDL 5/2015 (EBEP) | Estatuto Básico del Empleado Público |
+| Instrucción 1/2019 OIReScon | Criterios de tramitación de contratos menores |
+
+---
+
+## 🗂️ Estructura del proyecto
+
 clasificador-expedientes-ciemat/
-├── index.html → frontend estático (sin build)
+├── index.html          → frontend estático (sin build)
 ├── api/
-│ └── clasificar.js → función serverless (Vercel), llama a la API de Anthropic
-└── package.json → fija Node >=18 (usa fetch nativo, sin dependencias)
-## Despliegue (Vercel)
+│   └── clasificar.js   → función serverless (Vercel), llama a la API de Anthropic
+└── package.json        → fija Node >=18 (fetch nativo, sin dependencias)
+---
 
-1. Importar este repo en Vercel como proyecto nuevo, framework Other (sin build command).
-2. En Settings → Environment Variables, añadir:
-   - `ANTHROPIC_API_KEY` — clave generada en [console.anthropic.com](https://console.anthropic.com)
-3. Deploy. Vercel expone automáticamente `api/clasificar.js` como endpoint `/api/clasificar`.
-4. (Opcional) Dominio propio en Settings → Domains, apuntando un CNAME desde el proveedor DNS al valor que indique Vercel.
+## 🚀 Despliegue (Vercel)
 
-La API key nunca se expone en el navegador: vive solo en la variable de entorno del servidor.
+1. Importar el repo en Vercel — framework **Other**, sin build command.
+2. **Settings → Environment Variables** → añadir `ANTHROPIC_API_KEY` (generada en [console.anthropic.com](https://console.anthropic.com)).
+3. Deploy. Vercel expone `api/clasificar.js` automáticamente como `/api/clasificar`.
+4. Dominio propio opcional en **Settings → Domains**, con CNAME desde el proveedor DNS.
 
-## Marco legal cubierto
-
-- Ley 9/2017, de 8 de noviembre, de Contratos del Sector Público (LCSP) — arts. 2, 118, 118.3, DA54
-- Ley 39/2015 y Ley 40/2015
-- RDL 5/2015 (EBEP)
-- Instrucción 1/2019 OIReScon sobre contratos menores
-
-## Aviso
-
-Esta herramienta es un apoyo a la redacción y no sustituye la revisión de Gabinete Jurídico ante casos límite o de interpretación dudosa.
+La API key nunca se expone en el navegador: vive solo en el servidor.
 
 ---
 
-Creada por **Ignacio Menárguez Fernández** · División de Combustión y Gasificación, CIEMAT
+## ⚠️ Aviso
+
+Herramienta de apoyo a la redacción. No sustituye la revisión de Gabinete Jurídico ante casos límite o de interpretación dudosa.
+
+---
+
+**Creada por Ignacio Menárguez Fernández** · División de Combustión y Gasificación, CIEMAT
