@@ -143,8 +143,15 @@
   .badge{
     font-family:'Inter',sans-serif;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
     color:var(--gold-soft);border:1px solid var(--gold);border-radius:999px;padding:4px 10px;
-    flex-shrink:0;margin-left:12px;white-space:nowrap;
+    flex-shrink:0;white-space:nowrap;
   }
+  .head-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:12px;}
+  .reset-btn{
+    font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-dim);
+    background:none;border:1px solid rgba(255,255,255,0.12);padding:5px 12px;border-radius:999px;
+    cursor:pointer;white-space:nowrap;transition:border-color .12s ease, color .12s ease;
+  }
+  .reset-btn:hover{border-color:var(--gold);color:var(--gold-soft);}
 
   .section{padding:20px 22px;border-bottom:1px solid rgba(255,255,255,0.05);}
   .section:last-child{border-bottom:none;}
@@ -393,7 +400,10 @@ function pintarResultado(q, r){
     <div class="result">
       <div class="result-head">
         <div class="q utility">${escapeHtml(q)}</div>
-        <div class="badge">Clasificado</div>
+        <div class="head-actions">
+          <button class="reset-btn utility" onclick="volverInicio()">Nueva consulta</button>
+          <div class="badge">Clasificado</div>
+        </div>
       </div>
       <div class="section">
         <h3 class="utility">Clasificación</h3>
@@ -464,6 +474,16 @@ function limpiarHistorial(){
   historial = [];
   guardarHistorial();
   renderHistorial();
+}
+
+function volverInicio(){
+  document.getElementById('q').value = '';
+  document.getElementById('importe').value = '';
+  document.getElementById('proyectoIdi').value = '';
+  setIdi(false);
+  document.getElementById('output').innerHTML = '';
+  window.scrollTo({top:0, behavior:'smooth'});
+  document.getElementById('q').focus();
 }
 
 document.getElementById('q').addEventListener('keydown', (e) => {
