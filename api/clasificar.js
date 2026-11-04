@@ -4,7 +4,7 @@ const { search } = require('./search.js');
 // ---------------------------------------------------------------------------
 // Protección del endpoint
 // ---------------------------------------------------------------------------
-const LIMITE_POR_IP_HORA = 20;
+const LIMITE_POR_IP_HORA = 2;
 const LIMITE_GLOBAL_DIA = 300;
 const MAX_CARACTERES_PREGUNTA = 3000;
 
