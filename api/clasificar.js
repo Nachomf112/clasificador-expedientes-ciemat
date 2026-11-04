@@ -207,7 +207,32 @@ module.exports = async function handler(req, res) {
 
     if (!anthropicResponse.ok) {
       const errText = await anthropicResponse.text();
-      return res.status(anthropicResponse.status).json({ error: `Error de la API de Anthropic: ${errText}` });
+      console.error(`Error de la API de Anthropic (${anthropicResponse.status}): ${errText}`);
+
+      let tipo = '';
+      let mensajeApi = '';
+      try {
+        const e = JSON.parse(errText);
+        tipo = (e && e.error && e.error.type) || '';
+        mensajeApi = (e && e.error && e.error.message) || '';
+      } catch (_) { /* respuesta no JSON */ }
+
+      const st = anthropicResponse.status;
+      let mensaje;
+      if (st === 401 || tipo === 'authentication_error') {
+        mensaje = 'La clave de acceso a la IA no es válida o ha caducado. Avisa al administrador de la herramienta (Nacho) para que la renueve.';
+      } else if (st === 403 || tipo === 'permission_error') {
+        mensaje = 'La clave de acceso a la IA no tiene permisos para esta operación. Avisa al administrador de la herramienta.';
+      } else if (/credit balance/i.test(mensajeApi)) {
+        mensaje = 'La herramienta se ha quedado sin crédito de IA. Avisa al administrador para que lo recargue.';
+      } else if (st === 429 || tipo === 'rate_limit_error') {
+        mensaje = 'El servicio de IA está recibiendo demasiadas peticiones. Espera un minuto e inténtalo de nuevo.';
+      } else if (st === 529 || st >= 500 || tipo === 'overloaded_error' || tipo === 'api_error') {
+        mensaje = 'El servicio de IA no está disponible temporalmente. Inténtalo de nuevo en unos minutos.';
+      } else {
+        mensaje = 'No se ha podido procesar la consulta. Si se repite, avisa al administrador.';
+      }
+      return res.status(st >= 400 && st < 600 ? st : 502).json({ error: mensaje });
     }
 
     const data = await anthropicResponse.json();
