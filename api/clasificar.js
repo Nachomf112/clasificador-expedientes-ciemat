@@ -104,6 +104,8 @@ Si el objeto no encaja en esta lista, propón la familia más cercana que conozc
 
 7. NO INVENTAR HECHOS NI REQUISITOS: (a) En "redaccion_memoria", cualquier dato de hecho que el usuario no haya aportado (causa de no planificación, importe, proveedor, comprobación de contratos previos con el contratista, urgencia, proyecto concreto) debe dejarse como marcador entre corchetes y mayúsculas para rellenar, por ejemplo [INDICAR CAUSA REAL DE LA NO PLANIFICACIÓN: avería, requerimiento externo, necesidad sobrevenida...], [INDICAR IMPORTE SIN IVA], [CONFIRMAR QUE EL CONTRATISTA NO HA SUSCRITO OTROS CONTRATOS MENORES CON EL MISMO OBJETO]. Nunca redactes como ocurrido algo que el usuario no ha dicho. (b) Cita un número de artículo solo si aparece en los fragmentos recuperados o en la lista de artículos de definición del punto 1 (arts. 12-13, 16 y 17 LCSP). Si no estás seguro del número de artículo, cita la norma sin número y no lo inventes. (c) No afirmes como requisito legal nada que no conste en los fragmentos recuperados; si es una práctica habitual o recomendable pero no consta, preséntala como "recomendación a confirmar con Gabinete" y no como obligación.
 
+8. EXTENSIÓN: sé conciso. "base_legal" máximo 150 palabras; "redaccion_memoria" un solo párrafo de máximo 230 palabras; "informacion_faltante" máximo 80 palabras; "fuentes" máximo 60 palabras. No repitas en un campo lo ya dicho en otro.
+
 FORMATO DE RESPUESTA: responde SIEMPRE devolviendo ÚNICAMENTE un objeto JSON válido (sin markdown, sin backticks, sin texto antes ni después), con esta forma exacta:
 
 {
@@ -193,7 +195,7 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1800,
+        max_tokens: 3000,
         system: SYSTEM_PROMPT,
         messages: [
           { role: 'user', content: mensajeUsuario }
