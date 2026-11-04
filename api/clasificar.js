@@ -1,5 +1,54 @@
+const crypto = require('crypto');
 const { search } = require('./search.js');
 
+// ---------------------------------------------------------------------------
+// Protección del endpoint
+// ---------------------------------------------------------------------------
+const LIMITE_POR_IP_HORA = 20;
+const LIMITE_GLOBAL_DIA = 300;
+const MAX_CARACTERES_PREGUNTA = 3000;
+
+function obtenerIp(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) return String(xff).split(',')[0].trim();
+  return (req.socket && req.socket.remoteAddress) || 'desconocida';
+}
+
+// Devuelve null si Redis no está configurado. Lanza error si Redis falla.
+async function contarUso(ip) {
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+
+  const ahora = Date.now();
+  const bucketHora = Math.floor(ahora / 3600000);
+  const bucketDia = Math.floor(ahora / 86400000);
+  const ipHash = crypto.createHash('sha256').update(ip).digest('hex').slice(0, 16);
+  const keyIp = `rl:clasificador:ip:${ipHash}:${bucketHora}`;
+  const keyGlobal = `rl:clasificador:global:${bucketDia}`;
+
+  const r = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([
+      ['INCR', keyIp],
+      ['EXPIRE', keyIp, 3700],
+      ['INCR', keyGlobal],
+      ['EXPIRE', keyGlobal, 90000]
+    ])
+  });
+  if (!r.ok) throw new Error(`Redis respondió ${r.status}`);
+  const out = await r.json();
+  return {
+    usoIp: Number(out[0] && out[0].result),
+    usoGlobal: Number(out[2] && out[2].result),
+    minutosHastaSiguienteHora: Math.max(1, Math.ceil((3600000 - (ahora % 3600000)) / 60000))
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Prompt del sistema
+// ---------------------------------------------------------------------------
 const SYSTEM_PROMPT = `Eres un asesor experto en contratación pública española especializado en el procedimiento de contratos menores del CIEMAT (organismo público de investigación adscrito, sujeto a LCSP 9/2017, Ley 39/2015, Ley 40/2015, EBEP RDL 5/2015, e Instrucción 1/2019 OIReScon sobre contratos menores).
 
 Tu tarea: cuando el usuario te describa un material, servicio, obra o situación, debes CLASIFICARLO correctamente y justificar legalmente esa clasificación, orientado a que el usuario pueda tramitar el expediente de contratación menor sin devolución por parte de Gabinete.
@@ -29,7 +78,7 @@ CONOCIMIENTO CLAVE QUE DEBES APLICAR:
 
 5. Si falta información crítica para clasificar con certeza (importe exacto, si va vinculado a proyecto de investigación, si hay proveedor único, urgencia), indícalo explícitamente en tu respuesta en vez de asumir.
 
-6. FRAGMENTOS NORMATIVOS RECUPERADOS: a continuación de la pregunta del usuario recibirás una sección "FRAGMENTOS NORMATIVOS RELEVANTES" con extractos literales de la normativa oficial indexada (LCSP, Ley 39/2015, Ley 40/2015, EBEP, Instrucción 1/2019, etc.), recuperados automáticamente por relevancia a la consulta. Estos fragmentos son la fuente autoritativa: básate en ellos para tu "base_legal" citando el artículo y norma exactos tal como aparecen en el fragmento, en vez de recitar de memoria. Si los fragmentos recuperados no contienen la respuesta exacta a la pregunta, dilo explícitamente y razona con tu conocimiento general dejando claro que no está anclado a un fragmento recuperado. Nunca inventes un número de artículo que no aparezca en los fragmentos si citas uno como fuente.
+6. FRAGMENTOS NORMATIVOS RECUPERADOS: junto a la consulta recibirás fragmentos de la normativa con su identificador. Apóyate en ellos para la base legal y cita los identificadores de los fragmentos que uses en el campo "fuentes". Si una afirmación procede de tu conocimiento general y no de los fragmentos, indícalo expresamente. No inventes identificadores.
 
 FORMATO DE RESPUESTA: responde SIEMPRE devolviendo ÚNICAMENTE un objeto JSON válido (sin markdown, sin backticks, sin texto antes ni después), con esta forma exacta:
 
@@ -37,12 +86,15 @@ FORMATO DE RESPUESTA: responde SIEMPRE devolviendo ÚNICAMENTE un objeto JSON v�
   "clasificacion": "Frase corta y clara con la clasificación (tipo de objeto: suministro/servicio/obra, y categoría ej. instrumentación científica vs material de ferretería)",
   "cpv_orientativo": "Código(s) CPV orientativo(s) con su descripción breve",
   "umbral_aplicable": "Umbral aplicable (importe y artículo LCSP), indicando si aplica excepción DA54 o no y por qué",
-  "base_legal": "Explicación de la base legal que sustenta la clasificación, citando artículos concretos anclados en los fragmentos recuperados cuando existan (LCSP, Instrucción 1/2019 u otra norma relevante). 3-6 frases.",
+  "base_legal": "Explicación de la base legal y jurisprudencial/normativa que sustenta la clasificación, citando artículos concretos de LCSP, Instrucción 1/2019 u otra norma relevante. 3-6 frases.",
   "redaccion_memoria": "Un párrafo redactado en primera persona plural institucional, listo para copiar y pegar en la memoria justificativa del expediente, que describa el objeto, motive la necesidad, cite el CPV y el umbral aplicable, y declare la causa de no fraccionamiento/no planificación de forma genérica adaptable.",
   "informacion_faltante": "Si aplica, qué dato adicional se necesita para confirmar al 100% la clasificación (importe, vinculación a proyecto I+D, urgencia, proveedor único). Si no falta nada relevante, escribe 'Ninguna, la clasificación es clara con los datos aportados.'",
-  "fuentes": "Lista breve de los artículos y normas concretas de los fragmentos recuperados que has usado como base (ej. 'Art. 118 LCSP, Instrucción 1/2019 - Directriz III'). Si no usaste ningún fragmento recuperado, escribe 'Ninguno de los fragmentos recuperados aportaba lo necesario; respuesta basada en conocimiento general.'"
+  "fuentes": ["Identificadores de los fragmentos normativos utilizados, p. ej. el id exacto recibido. Lista vacía si no se ha usado ninguno."]
 }`;
 
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -71,18 +123,40 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'Falta el campo "pregunta" en el cuerpo de la petición.' });
   }
 
+  if (pregunta.length > MAX_CARACTERES_PREGUNTA) {
+    return res.status(413).json({
+      error: `La consulta es demasiado larga (${pregunta.length} caracteres). El máximo es ${MAX_CARACTERES_PREGUNTA}. Resúmela e inténtalo de nuevo.`
+    });
+  }
+
+  // Límite de uso (fail-open si Redis no está configurado o falla)
   try {
-    const fragmentosRelevantes = search(pregunta, 6);
-
-    let bloqueFragmentos = '';
-    if (fragmentosRelevantes.length > 0) {
-      bloqueFragmentos = '\n\nFRAGMENTOS NORMATIVOS RELEVANTES (recuperados automáticamente, cita el artículo/norma exactos si los usas):\n\n' +
-        fragmentosRelevantes.map((f, i) => `[${i + 1}] (${f.doc} · ${f.id})\n${f.text}`).join('\n\n');
+    const uso = await contarUso(obtenerIp(req));
+    if (uso) {
+      if (uso.usoGlobal > LIMITE_GLOBAL_DIA) {
+        return res.status(429).json({
+          error: 'Se ha alcanzado el límite diario de consultas de la herramienta. Vuelve a intentarlo mañana.'
+        });
+      }
+      if (uso.usoIp > LIMITE_POR_IP_HORA) {
+        return res.status(429).json({
+          error: `Has superado el límite de ${LIMITE_POR_IP_HORA} consultas por hora. Inténtalo de nuevo en unos ${uso.minutosHastaSiguienteHora} minutos.`
+        });
+      }
     } else {
-      bloqueFragmentos = '\n\n(No se han recuperado fragmentos normativos relevantes para esta consulta. Responde con tu conocimiento general y indícalo en el campo "fuentes".)';
+      console.warn('Rate limit desactivado: faltan KV_REST_API_URL / KV_REST_API_TOKEN.');
     }
+  } catch (e) {
+    console.error('Fallo en el control de límite de uso (se permite la petición):', e.message);
+  }
 
-    const mensajeUsuario = pregunta + bloqueFragmentos;
+  try {
+    const fragmentos = search(pregunta, 6);
+    const bloqueFragmentos = fragmentos.length
+      ? '\n\n--- FRAGMENTOS NORMATIVOS RECUPERADOS ---\n' +
+        fragmentos.map(f => `[${f.id}] (${f.doc}) ${f.text}`).join('\n\n') +
+        '\n--- FIN DE FRAGMENTOS ---'
+      : '';
 
     const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -95,9 +169,7 @@ module.exports = async function handler(req, res) {
         model: 'claude-sonnet-4-6',
         max_tokens: 1800,
         system: SYSTEM_PROMPT,
-        messages: [
-          { role: 'user', content: mensajeUsuario }
-        ]
+        messages: [{ role: 'user', content: pregunta + bloqueFragmentos }]
       })
     });
 
@@ -109,7 +181,7 @@ module.exports = async function handler(req, res) {
     const data = await anthropicResponse.json();
 
     if (data.stop_reason === 'max_tokens') {
-      return res.status(502).json({ error: 'La respuesta se cortó por longitud. Reformula la pregunta de forma más breve o inténtalo de nuevo.' });
+      return res.status(502).json({ error: 'La respuesta del modelo se cortó por longitud. Reformula la consulta de forma más concreta.' });
     }
 
     const textBlock = (data.content || []).find(b => b.type === 'text');
@@ -117,19 +189,18 @@ module.exports = async function handler(req, res) {
       return res.status(502).json({ error: 'Respuesta vacía del modelo.' });
     }
 
-    const raw = textBlock.text;
-    const firstBrace = raw.indexOf('{');
-    const lastBrace = raw.lastIndexOf('}');
-    if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
-      return res.status(502).json({ error: 'El modelo no devolvió un JSON válido.', raw });
+    const texto = textBlock.text;
+    const ini = texto.indexOf('{');
+    const fin = texto.lastIndexOf('}');
+    if (ini === -1 || fin === -1 || fin < ini) {
+      return res.status(502).json({ error: 'El modelo no devolvió un JSON válido.', raw: texto });
     }
-    const clean = raw.slice(firstBrace, lastBrace + 1);
 
     let parsed;
     try {
-      parsed = JSON.parse(clean);
+      parsed = JSON.parse(texto.slice(ini, fin + 1));
     } catch (e) {
-      return res.status(502).json({ error: 'El modelo no devolvió un JSON válido.', raw: clean });
+      return res.status(502).json({ error: 'El modelo no devolvió un JSON válido.', raw: texto });
     }
 
     return res.status(200).json(parsed);
